@@ -1,0 +1,9 @@
+[submodule "ABY"]
+	path = extern/ABY
+	url = https://github.com/encryptogroup/ABY
+[submodule "libOTe"]
+	path = extern/libOTe
+	url = https://github.com/osu-crypto/libOTe
+[submodule "HashingTables"]
+	path = extern/HashingTables
+	url = https://github.com/Oleksandr-Tkachenko/HashingTables
