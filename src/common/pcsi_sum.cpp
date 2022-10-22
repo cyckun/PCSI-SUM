@@ -25,6 +25,8 @@
 
 namespace PCSI{
 
+int debugx = 0;
+
 std::unique_ptr<CSocket> create_socket(const std::string ip, uint16_t port, e_role role) {
     std::unique_ptr<CSocket> sock;
     if (role == SERVER) {
@@ -86,17 +88,24 @@ void interpolate_poly(std::vector<uint64_t>& polys, std::vector<uint64_t>& X, st
     }
 }
 
-void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint64_t>& src, std::vector<std::array<osuCrypto::block, 2>>& ot_output, std::vector<osuCrypto::block>& corr_blocks) {
+void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint64_t>& src, 
+                    std::vector<std::array<osuCrypto::block, 2>>& ot_output, 
+                    std::vector<osuCrypto::block>& corr_blocks) {
     // generate msg
     // msg[0] = m0 ^ w0 || m1 ^ w1
     // msg[1] = m0 ^ w1 || m1 ^ w0
 
+    debugx += 1;
+    std::cout <<  "degubx = " << debugx << std::endl;
     int value_num = src.size();
     std::vector<uint64_t> bottom1;
     std::vector<uint64_t> top1;
 
     uint64_t m0, m1, w0, w1, tmp_m0[2], tmp_m1[2], corr_msg[2];
     osuCrypto::block tmp_block;
+   
+    if (n == 2 )  printf("core will hapen\n\n");
+
 
     if (value_num == 2) {
         if (n == 1) {
@@ -112,6 +121,8 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
 
             corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
             corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
+
+            if (cur_level * (bins / 2) + index >= 42) printf("core err \n\n\n");
 
             corr_blocks[cur_level * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
 
@@ -189,7 +200,6 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
         ot_output[(cur_level + 1) * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
         src[0] = w0;
         src[1] = w1;
-
         // process 1 and 3
         m0 = src[1];
         m1 = src[2];
@@ -211,10 +221,10 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
         ot_output[(cur_level + 2) * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
         src[0] = w0;
         src[1] = w1;
-
+        
         return;
     }
-
+    
     int levels = 2 * n - 1;
     for (int i = 0; i < value_num - 1; i++) {
         m0 = src[i];
@@ -237,7 +247,7 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
         ot_output[cur_level * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
         src[i] = w0;
         src[i ^ 1] = w1;
-
+        printf("boto size = %d\n", bottom1.size());
         bottom1.push_back(src[i]);
         top1.push_back(src[i ^ 1]);
     }
@@ -246,8 +256,8 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
         top1.push_back(src[value_num - 1]);
     }
 
-    gen_corr_block(n - 1, bins, cur_level + 1, index, bottom1, ot_output, corr_blocks);
-    gen_corr_block(n - 1, bins, cur_level + 1, index + value_num / 4, bottom1, ot_output, corr_blocks);
+    if (bottom1.size()> 0) gen_corr_block(n - 1, bins, cur_level + 1, index, bottom1, ot_output, corr_blocks);
+    if (bottom1.size()> 0) gen_corr_block(n - 1, bins, cur_level + 1, index + value_num / 4, bottom1, ot_output, corr_blocks);
 
     for (int i = 0; i < value_num - 1; i+=2) {
         m0 = top1[i / 2];
@@ -276,6 +286,7 @@ void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint6
     if (value_num & 1) {
         src[value_num - 1] = top1[middle];
     }
+    printf("leave gen_corr_block, value_num = %d, n = %d, debugx = %d , bottom1 = %d,\n", value_num, n, debugx, bottom1.size());
 }
 
 std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSIContext& ctx) {
@@ -311,6 +322,7 @@ std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSICon
     std::vector<osuCrypto::block> recv_corr(choices.size());
 
     rot_recv(choices, recv_msg, ctx);
+    printf("finish rot_recv");
 
     osuCrypto::Session ep(ios, ctx.ip, ctx.port + 100, osuCrypto::SessionMode::Server, name);
     auto osn_recv_chl = ep.addChannel(name, name);
@@ -352,10 +364,14 @@ std::vector<std::vector<uint64_t>> send_osn(int bins, PCSIContext& ctx) {
 
     std::vector<std::array<osuCrypto::block, 2>> ot_msg(switch_num);
     rot_send(ot_msg, ctx);
+    printf("test013  switch_num = %d.\n", switch_num);
 
     std::vector<osuCrypto::block> corr_blocks(switch_num);
-
+    
+    std::cout << "n = " << n << std::endl;
+    std::cout << "bins = " << bins << std::endl;
     gen_corr_block(n, bins, 0, 0, masks, ot_msg, corr_blocks);
+    printf("test015********************************************** .\n");
 
     osuCrypto::IOService ios;
     std::string name = "pcsi";
@@ -364,6 +380,7 @@ std::vector<std::vector<uint64_t>> send_osn(int bins, PCSIContext& ctx) {
     auto osn_send_chl = ep.addChannel(name, name);
     osn_send_chl.asyncSend(corr_blocks);
 
+    printf("test014 .\n");
     for (int i = 0; i < bins; i++) {
         mat_masks[i].push_back(masks[i]);
     }
@@ -458,14 +475,18 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
 
 uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::vector<uint64_t>& data) {
     // network
+    printf("test0.\n");
     std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
     sock->Close();
+    printf("test00.\n");
 
     std::vector<uint64_t> input_bak(inputs), sets;
     int bins = ctx.bins_num;
+    std::cout << "^^^^^^^^^^^^^" << bins << std::endl;
     uint64_t output = 0;
 
     if (ctx.role == CLIENT) {
+        // client give Data
         // 1. osn preprocessing 
         // 1.1 initial paramters
         std::vector<int> dest(bins);
@@ -552,10 +573,15 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
 
     } else {
         // offline osn
+        // server is receiver, have func, not data;
+        std::cout << "server inter exec. " << std::endl;
         std::vector<std::vector<uint64_t>> pre_masks = send_osn(bins, ctx);
+        printf("test01 .\n");
 
         // pcsi preprocessing
         sets = server_opprf(input_bak, ctx);
+
+        printf("finish opprf.\n");
 
         // online osn
         osuCrypto::IOService ios;
@@ -574,7 +600,7 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         for (int i = 0; i < ctx.bins_num; i++) {
             output_masks.push_back(pre_masks[i][1]);
         }
-
+        printf("finish masks .\n");
         // equality test
         std::string name_ = "pcsi";
         osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Client, name_);
@@ -589,6 +615,7 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         }
 
         // do sum
+        printf("begin do sum.\n");
         std::vector<osuCrypto::block> recv_msg(char_vec.size());
         ot_recv(char_vec, recv_msg, ctx);
         uint64_t ot_msg[2];

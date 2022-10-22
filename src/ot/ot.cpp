@@ -197,7 +197,7 @@ void rot_send(std::vector<std::array<osuCrypto::block,2>> &msg, PCSI::PCSIContex
     DefaultBaseOT base_ot;
     BitVector base_choices(sec_para);
     base_choices.randomize(prng);
-
+    printf("rot send test01 .\n");
     // start ot extension
     osuCrypto::IknpOtExtSender sender;
     base_ot.receive(base_choices, base_recv, prng, send_chl, 1);
