@@ -542,53 +542,53 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         }
         masked_eval(n, 0, 0, input_vec, mat_ot_output);
 	    std::cout << "[client]finish 3" << std::endl;
-        // // 4. send the result to process equality test
-        // std::string name_ = "pcsi";
-        // osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Server, name_);
-        // auto send_chl_eq = ep_.addChannel(name_, name_);
-        // std::vector<uint64_t> sets_eq;
-        // for (int i = 0; i < bins; i++) {
-        //     sets_eq.push_back(shuffled_sets[i] ^ input_vec[i]);
-        // }
-        // send_chl_eq.asyncSend(sets_eq);
-	    // std::cout << "[client]finish 4" << std::endl;
-        // // 5. do sum
-        // std::vector<std::pair<uint64_t, uint64_t>> candidate;
-        // candidate.reserve(input_bak.size());
-        // std::transform(input_bak.begin(), input_bak.end(), data.begin(), std::back_inserter(candidate), [](uint64_t x, uint64_t y){ return std::make_pair(x, y); });
-        // std::sort(candidate.begin(), candidate.end());
+        // 4. send the result to process equality test
+        std::string name_ = "pcsi";
+        osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Server, name_);
+        auto send_chl_eq = ep_.addChannel(name_, name_);
+        std::vector<uint64_t> sets_eq;
+        for (int i = 0; i < bins; i++) {
+            sets_eq.push_back(shuffled_sets[i] ^ input_vec[i]);
+        }
+        send_chl_eq.asyncSend(sets_eq);
+	    std::cout << "[client]finish 4" << std::endl;
+        // 5. do sum
+        std::vector<std::pair<uint64_t, uint64_t>> candidate;
+        candidate.reserve(input_bak.size());
+        std::transform(input_bak.begin(), input_bak.end(), data.begin(), std::back_inserter(candidate), [](uint64_t x, uint64_t y){ return std::make_pair(x, y); });
+        std::sort(candidate.begin(), candidate.end());
 
-        // std::vector<uint64_t> candidate_index(candidate.size());
-        // for (int i = 0; i < candidate.size(); i++) {
-        //     candidate_index[i] = candidate[i].first;
-        // }
+        std::vector<uint64_t> candidate_index(candidate.size());
+        for (int i = 0; i < candidate.size(); i++) {
+            candidate_index[i] = candidate[i].first;
+        }
 
-        // // assign 
-        // for (int i = 0; i < cuckoo_table.size(); i++) {
-        //     std::vector<uint64_t>::iterator it = std::lower_bound(candidate_index.begin(), candidate_index.end(), cuckoo_table[i]);
+        // assign 
+        for (int i = 0; i < cuckoo_table.size(); i++) {
+            std::vector<uint64_t>::iterator it = std::lower_bound(candidate_index.begin(), candidate_index.end(), cuckoo_table[i]);
 
-        //     if (it == std::end(candidate_index)) {
-        //         cuckoo_table[i] = 0;
-        //     } else {
-        //         cuckoo_table[i] = candidate[it-candidate_index.begin()].second;
-        //     }
-        // }
+            if (it == std::end(candidate_index)) {
+                cuckoo_table[i] = 0;
+            } else {
+                cuckoo_table[i] = candidate[it-candidate_index.begin()].second;
+            }
+        }
 
-        // std::vector<uint64_t> shuffled_table(cuckoo_table.size());
-        // for (int i = 0; i < cuckoo_table.size(); i++) {
-        //     shuffled_table[i] = cuckoo_table[dest[i]];
-        // }
+        std::vector<uint64_t> shuffled_table(cuckoo_table.size());
+        for (int i = 0; i < cuckoo_table.size(); i++) {
+            shuffled_table[i] = cuckoo_table[dest[i]];
+        }
 
-        // osuCrypto::PRNG prng(_mm_set_epi32(0, 0, 0, 0));
-        // std::vector<std::vector<osuCrypto::block>> msg(cuckoo_table.size());
+        osuCrypto::PRNG prng(_mm_set_epi32(0, 0, 0, 0));
+        std::vector<std::vector<osuCrypto::block>> msg(cuckoo_table.size());
 
-        // for (int i = 0; i < cuckoo_table.size(); i++) {
-        //     int r = prng.get<uint64_t>();
-        //     msg[i].push_back(osuCrypto::toBlock(0, r));
-        //     msg[i].push_back(osuCrypto::toBlock(0, shuffled_table[i] - r));
-        //     output += r;
-        // }
-        // ot_send(msg, ctx);
+        for (int i = 0; i < cuckoo_table.size(); i++) {
+            int r = prng.get<uint64_t>();
+            msg[i].push_back(osuCrypto::toBlock(0, r));
+            msg[i].push_back(osuCrypto::toBlock(0, shuffled_table[i] - r));
+            output += r;
+        }
+        ot_send(msg, ctx);
 
     } else {
         // offline osn
@@ -621,28 +621,28 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
             output_masks.push_back(pre_masks[i][1]);
         }
         printf("finish masks .\n");
-        // // equality test
-        // std::string name_ = "pcsi";
-        // osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Client, name_);
-        // auto recv_chl_eq = ep_.addChannel(name_, name_);
-        // std::vector<uint64_t> sets_eq(bins);
-        // recv_chl_eq.recv(sets_eq.data(), sets_eq.size());
-        // osuCrypto::BitVector char_vec(sets_eq.size());
-        // for (int i=0; i < sets_eq.size();++i) {
-        //     if (sets_eq[i] == output_masks[i]) {
-        //         char_vec[i] = 1;
-        //     }
-        // }
+        // equality test
+        std::string name_ = "pcsi";
+        osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Client, name_);
+        auto recv_chl_eq = ep_.addChannel(name_, name_);
+        std::vector<uint64_t> sets_eq(bins);
+        recv_chl_eq.recv(sets_eq.data(), sets_eq.size());
+        osuCrypto::BitVector char_vec(sets_eq.size());
+        for (int i=0; i < sets_eq.size();++i) {
+            if (sets_eq[i] == output_masks[i]) {
+                char_vec[i] = 1;
+            }
+        }
 
-        // // do sum
-        // printf("begin do sum.\n");
-        // std::vector<osuCrypto::block> recv_msg(char_vec.size());
-        // ot_recv(char_vec, recv_msg, ctx);
-        // uint64_t ot_msg[2];
-        // for (int i=0; i < recv_msg.size(); ++i) {
-        //     memcpy(ot_msg, &recv_msg[i], sizeof(ot_msg)); 
-        //     output += ot_msg[0];
-        // }
+        // do sum
+        printf("begin do sum.\n");
+        std::vector<osuCrypto::block> recv_msg(char_vec.size());
+        ot_recv(char_vec, recv_msg, ctx);
+        uint64_t ot_msg[2];
+        for (int i=0; i < recv_msg.size(); ++i) {
+            memcpy(ot_msg, &recv_msg[i], sizeof(ot_msg)); 
+            output += ot_msg[0];
+        }
     }
     return output;
 }
