@@ -13,65 +13,70 @@ void Poly::eval(ZpLongEle& Y, const std::vector<ZpLongEle>& co, ZpLongEle X) {
 
 
 void Poly::interpolate(std::vector<ZpLongEle>& co, const std::vector<ZpLongEle>& X, std::vector<ZpLongEle>& Y) {
-    // the size of (X, Y) is the size of coefficients
-    // Lagrange interpolation in a prime field where the prime is the Mersenne prime 2^{61} - 1
-    // using **Gauss Elimination**, the computational degree is O(m^2) 
-    int64_t k = X.size();
+  int64_t m = X.size();
+  if (Y.size() != X.size()) std::cout << "interpolate: vector length mismatch" << std::endl;
 
-    ZpLongEle ONE(1);
-    ZpLongEle ZERO(1);
-    ZpLongEle P(ZpLongEle::p);
+  ZpLongEle one(1);
+  ZpLongEle zero(0);
 
-    std::vector<ZpLongEle> prod;
-    prod = X;
+  ZpLongEle p(ZpLongEle::p);
 
-    ZpLongEle m, n;
+  std::vector<ZpLongEle> prod;
+  prod = X;
 
-    std::vector<ZpLongEle> res;
-    res.resize(k);
+  ZpLongEle t1, t2;
 
-    for (auto i = 0; i < k; i++) {
-        const ZpLongEle& a = X[i];
+  int64_t k, i;
 
-        m = 1;
-        for (auto j = i - 1; j >= 0; j--) {
-            m *= a;
-            m += prod[j];
-        }
+  std::vector<ZpLongEle> res;
+  res.resize(m);
 
-        n = 0;
-        for (auto j = i - 1; j >= 0; j--) {
-            n *= a;
-            n += res[j];
-        }
+  for (k = 0; k < m; k++) {
+    const ZpLongEle& aa = X[k];
 
-        m = ONE / m;
-        n = Y[i] - n;
-        m *= n;
-
-        for (auto j = 0; j < i; j++) {
-            n = prod[j] * m;
-            res[j] += n;
-        }
-
-        res[i] = m;
-
-        if (i < k - 1) {
-            if (i == 0) {
-                prod[0] = P - prod[0];
-            } else {
-                m = P - X[i];
-                prod[i] = m + prod[i - 1];
-                for (auto j = i - 1; j >= 1; j--) {
-                    n = prod[j] * m;
-                    prod[j] = n + prod[j - 1];
-                }
-                prod[0] *= m;
-            }
-        }
+    t1 = 1;
+    for (i = k - 1; i >= 0; i--) {
+      t1 = t1 * aa;       // mul(t1, t1, aa);
+      t1 = t1 + prod[i];  // add(t1, t1, prod[i]);
     }
-    while (k > 0 && !(res[k - 1] != ZERO)) k--;
-    res.resize(k);
 
-    co = res;
+    t2 = 0;  // clear(t2);
+    for (i = k - 1; i >= 0; i--) {
+      t2 = t2 * aa;      // mul(t2, t2, aa);
+      t2 = t2 + res[i];  // add(t2, t2, res[i]);
+    }
+
+    t1 = one / t1;   // inv(t1, t1);
+    t2 = Y[k] - t2;  // sub(t2, b[k], t2);
+    t1 = t1 * t2;    // mul(t1, t1, t2);
+
+    for (i = 0; i < k; i++) {
+      t2 = prod[i] * t1;     // mul(t2, prod[i], t1);
+      res[i] = res[i] + t2;  // add(res[i], res[i], t2);
+    }
+
+    res[k] = t1;
+
+    if (k < m - 1) {
+      if (k == 0)
+        prod[0] = p - prod[0];  // sub(prod[0], to_ZZ_p(ZZ_pInfo->p),prod[0]);//sub(prod[0],
+                                // ZZ_p::modulus(), prod[0]);//negate(prod[0], prod[0]);
+      else {
+        t1 = p - X[k];               // sub(t1, to_ZZ_p(ZZ_pInfo->p),a[k]);//negate(t1, a[k]);
+        prod[k] = t1 + prod[k - 1];  // add(prod[k], t1, prod[k-1]);
+        for (i = k - 1; i >= 1; i--) {
+          t2 = prod[i] * t1;           // mul(t2, prod[i], t1);
+          prod[i] = t2 + prod[i - 1];  // add(prod[i], t2, prod[i-1]);
+        }
+        prod[0] = prod[0] * t1;  // mul(prod[0], prod[0], t1);
+      }
+    }
+  }
+
+  while (m > 0 && !(res[m - 1] != zero)) m--;
+  res.resize(m);
+
+  co = res;
 }
+
+

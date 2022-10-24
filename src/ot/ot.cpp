@@ -131,6 +131,7 @@ void ot_send(std::vector<std::vector<osuCrypto::block>>& msg, PCSI::PCSIContext&
     auto send_chl = ep.addChannel(name, name);
 
     PRNG prng(_mm_set_epi32(0, 0, 0, 0));
+    std::cout << "ot_send func , sec_para  = " << sec_para << std::endl;
 
     std::vector<osuCrypto::block> base_recv(sec_para);
     DefaultBaseOT base_ot;
@@ -193,11 +194,10 @@ void rot_send(std::vector<std::array<osuCrypto::block,2>> &msg, PCSI::PCSIContex
     auto send_chl = ep.addChannel(name, name);
 
     PRNG prng(_mm_set_epi32(0, 0, 0, 0));
-    std::vector<osuCrypto::block> base_recv(sec_para);
+    std::vector<osuCrypto::block> base_recv(sec_para);  // 128
     DefaultBaseOT base_ot;
     BitVector base_choices(sec_para);
     base_choices.randomize(prng);
-    printf("rot send test01 .\n");
     // start ot extension
     osuCrypto::IknpOtExtSender sender;
     base_ot.receive(base_choices, base_recv, prng, send_chl, 1);

@@ -69,7 +69,7 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
 
     {
         auto psi_server = PCSI::exec(server_inputs, server_context);
-        std::cout << "psi server start , " <<  psi_server << std::endl;
+        std::cout << "psi server end , " <<  psi_server << std::endl;
     }
 }
 
