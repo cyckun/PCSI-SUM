@@ -1,14 +1,14 @@
 #include "poly.h"
 
-void Poly::eval(ZpLongEle& Y, const std::vector<ZpLongEle>& co, ZpLongEle X) {
-    ZpLongEle ans;
+void Poly::eval(ZpLongEle& Y, const std::vector<ZpLongEle>& coeff, ZpLongEle X) {
+  ZpLongEle acc(0);
 
-    for (auto i = co.size() - 1; i >= 0; i--) {
-        ans *= X;
-        ans += co[i];
-    }
+  for (int64_t i = coeff.size() - 1; i >= 0; i--) {
+    acc = acc * X;         // mul(acc, acc, a);
+    acc = acc + coeff.at(i);  // add(acc, acc, f.rep[i]);
+  }
 
-    Y = ans;
+  Y = acc;
 }
 
 

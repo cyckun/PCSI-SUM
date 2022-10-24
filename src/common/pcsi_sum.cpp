@@ -411,8 +411,7 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
     std::cout << "test, finish oprf receiver ." << std::endl;
 
     // 3. get polynominal and evaluate
-    // std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
-    std::unique_ptr<CSocket> sock = Connect(ctx.ip.c_str(), ctx.port);; // 基本确认更改有效；
+    std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
     const auto bin_num_in_mega_bin = ceil_divide(ctx.bins_num, ctx.mega_bins_num);
     std::vector<std::vector<ZpLongEle>> polys(ctx.mega_bins_num);
     std::vector<ZpLongEle> X(ctx.bins_num), Y(ctx.bins_num);
@@ -423,34 +422,34 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
     for (auto i = 0ull; i < X.size(); i++) {
         X[i].ele = masks[i];
     }
-    std::cout << "test, get poly before socket recv ." << std::endl;
     // 3.1 receive poly from server
     std::vector<uint8_t> poly_buffer(ctx.mega_bins_num * ctx.poly_bytelength);
 
-    // sock->Receive(poly_buffer.data(), ctx.mega_bins_num * ctx.poly_bytelength);
-    // sock->Close();
-    // std::cout << "test, get poly after socket recv ." << std::endl;
+    sock->Receive(poly_buffer.data(), ctx.mega_bins_num * ctx.poly_bytelength);
+    sock->Close();
+    std::cout << "test, get poly after socket recv ." << std::endl;
 
-    // // 3.2 evaluate
-    // for (auto i = 0; i < poly_buffer.size(); i++) {
-    //     for (auto j = 0; j < ctx.poly_size; j++) {
-    //         polys[i][j].ele = (reinterpret_cast<uint64_t *>(
-    //       poly_buffer.data()))[i * ctx.poly_size + j];
-    //     }
-    // }
+    // 3.2 evaluate
+    for (auto i = 0; i < poly_buffer.size() && i < ctx.mega_bins_num; i++) {  // cyc:check
+        for (auto j = 0; j < ctx.poly_size; j++) {
+            // polys[i][j].ele = (reinterpret_cast<uint64_t *>(
+            polys.at(i).at(j).ele = (reinterpret_cast<uint64_t *>(
+          poly_buffer.data()))[i * ctx.poly_size + j];
+        }
+    }
 
-    // for (auto i = 0; i < X.size(); i++) {
-    //     auto p = i / bin_num_in_mega_bin;
-    //     Poly::eval(Y[i], polys[p], X[i]);
-    // }
-    // std::cout << "test, evluate ." << std::endl;
-    // // 3.3 xor
+
+    for (auto i = 0; i < X.size(); i++) {
+        auto p = i / bin_num_in_mega_bin;
+        Poly::eval(Y.at(i), polys.at(p), X.at(i));
+    }
+
+    // 3.3 xor
     std::vector<uint64_t> result;
-    // result.reserve(X.size());
-    // for (auto i = 0ull; i < X.size(); i++) {
-    //     result.push_back(X[i].ele ^ Y[i].ele);
-    // }
-    // std::cout << "test, xor ." << std::endl;
+    result.reserve(X.size());
+    for (auto i = 0ull; i < X.size(); i++) {
+        result.push_back(X[i].ele ^ Y[i].ele);
+    }
 
     return result;
 }
@@ -483,9 +482,9 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
     }
     printf("\nploy vector print\n");
 
-    // std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
-    // // sock->Send((uint8_t *)polys.data(), ctx.mega_bins_num * ctx.poly_bytelength); // 已测试，不是sock的问题
-    // sock->Close();
+    std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
+    sock->Send((uint8_t *)polys.data(), ctx.mega_bins_num * ctx.poly_bytelength); // 已测试，不是sock的问题
+    sock->Close();
 
     std::cout << "socket has setup" << std::endl;
 
