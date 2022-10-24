@@ -520,28 +520,28 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         std::vector<uint64_t> cuckoo_table;
         sets = client_opprf(input_bak, cuckoo_table, ctx);
 	    std::cout << "[client]finish 2" << std::endl;
-        // // 3. online osn
-        // std::vector<uint64_t> shuffled_sets(bins);
-        // for (int i = 0; i < bins; i++) {
-        //     shuffled_sets[i] = sets[dest[i]];
-        // }
+        // 3. online osn
+        std::vector<uint64_t> shuffled_sets(bins);
+        for (int i = 0; i < bins; i++) {
+            shuffled_sets[i] = sets[dest[i]];
+        }
 
-        // std::string name = "pcsi";
-        // osuCrypto::IOService ios;
-        // osuCrypto::Session ep(ios, ctx.ip, ctx.port + 20, osuCrypto::SessionMode::Server, name);
-        // auto recv_chl = ep.addChannel(name, name);
-        // std::vector<uint64_t> input_vec(bins);
-        // recv_chl.recv(input_vec.data(), input_vec.size());
+        std::string name = "pcsi";
+        osuCrypto::IOService ios;
+        osuCrypto::Session ep(ios, ctx.ip, ctx.port + 20, osuCrypto::SessionMode::Server, name);
+        auto recv_chl = ep.addChannel(name, name);
+        std::vector<uint64_t> input_vec(bins);
+        recv_chl.recv(input_vec.data(), input_vec.size());
 
-        // std::vector<std::vector<osuCrypto::block>> mat_ot_output(levels, std::vector<osuCrypto::block>(bins));
-        // int index = 0;
-        // for (int i = 0; i < levels; i++) {
-        //     for (int j = 0; j < bins / 2; j++) {
-        //         mat_ot_output[i][j] = ot_output[index++];
-        //     }
-        // }
-        // masked_eval(n, 0, 0, input_vec, mat_ot_output);
-	    // std::cout << "[client]finish 3" << std::endl;
+        std::vector<std::vector<osuCrypto::block>> mat_ot_output(levels, std::vector<osuCrypto::block>(bins));
+        int index = 0;
+        for (int i = 0; i < levels; i++) {
+            for (int j = 0; j < bins / 2; j++) {
+                mat_ot_output[i][j] = ot_output[index++];
+            }
+        }
+        masked_eval(n, 0, 0, input_vec, mat_ot_output);
+	    std::cout << "[client]finish 3" << std::endl;
         // // 4. send the result to process equality test
         // std::string name_ = "pcsi";
         // osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Server, name_);
@@ -603,24 +603,24 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
 
         printf("finish opprf.\n");
 
-        // // online osn
-        // osuCrypto::IOService ios;
-        // std::string name = "pcsi";
-        // osuCrypto::Session ep(ios, ctx.ip, ctx.port + 20, osuCrypto::SessionMode::Client, name);
-        // auto send_chl = ep.addChannel(name, name);
-        // std::vector<uint64_t> output_masks, benes_input;
+        // online osn
+        osuCrypto::IOService ios;
+        std::string name = "pcsi";
+        osuCrypto::Session ep(ios, ctx.ip, ctx.port + 20, osuCrypto::SessionMode::Client, name);
+        auto send_chl = ep.addChannel(name, name);
+        std::vector<uint64_t> output_masks, benes_input;
 
-        // for (int i = 0; i < sets.size(); i++) {
-        //     pre_masks[i][0] ^= sets[i];
-        // }
-        // for (int i = 0; i < bins; i++) {
-        //     benes_input.push_back(pre_masks[i][0]);
-        // }
-        // send_chl.asyncSend(benes_input);
-        // for (int i = 0; i < ctx.bins_num; i++) {
-        //     output_masks.push_back(pre_masks[i][1]);
-        // }
-        // printf("finish masks .\n");
+        for (int i = 0; i < sets.size(); i++) {
+            pre_masks[i][0] ^= sets[i];
+        }
+        for (int i = 0; i < bins; i++) {
+            benes_input.push_back(pre_masks[i][0]);
+        }
+        send_chl.asyncSend(benes_input);
+        for (int i = 0; i < ctx.bins_num; i++) {
+            output_masks.push_back(pre_masks[i][1]);
+        }
+        printf("finish masks .\n");
         // // equality test
         // std::string name_ = "pcsi";
         // osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Client, name_);
