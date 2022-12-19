@@ -21,7 +21,14 @@ public:
     unsigned long long ele;
 
     ZpLongEle() { ele = 0; };
-    ZpLongEle(unsigned long long e) { ele = e; };
+    ZpLongEle(unsigned long e) { 
+        this->ele = e; 
+        if (this->ele >= p) {
+            this->ele = (this->ele & p) + (this->ele >> 61);
+
+            if (this->ele >= p) this->ele -= p;
+        }
+    };
     
     // check equal
     bool operator!=(const ZpLongEle& other) { return other.ele != ele; };
@@ -32,14 +39,24 @@ public:
     // add
     ZpLongEle operator+(const ZpLongEle& other) { 
         ZpLongEle ans;
-        ans.ele = (ele + other.ele) % p;
+        ans.ele = (ele + other.ele);
+
+        if (ans.ele >= p) ans.ele -= p;
         return ans;
     };
 
     // minus
     ZpLongEle operator-(const ZpLongEle& other) { 
         ZpLongEle ans;
-        ans.ele = (ele - other.ele) % p;
+
+        int64_t temp = ele - other.ele;
+
+        if (temp < 0) {
+            ans.ele = temp + p;
+        } else {
+            ans.ele = temp;
+        }
+
         return ans;
     };
 
@@ -51,7 +68,11 @@ public:
         unsigned long long low = _mulx_u64(ele, other.ele, &high);
         
         unsigned long long low61 = (low & p);
-        unsigned long long res = (low61 + (low >> 61) + (high << 3)) % p;
+        unsigned long long res = (low61 + (low >> 61) + (high << 3));
+
+        if (res >= p) {
+            res -= p;
+        }
 
         ans.ele = res;
 
@@ -61,33 +82,36 @@ public:
     // div (using exgcd)
     // \frac{this}{other} = this \cdot ( other^{-1} mod p )
     ZpLongEle operator/(const ZpLongEle& other) {
-        ZpLongEle ans;
+        ZpLongEle answer;
+        mpz_t d;
+        mpz_t result;
+        mpz_t mpz_elem;
+        mpz_t mpz_me;
+        mpz_init_set_str(d, "2305843009213693951", 10);
+        mpz_init(mpz_elem);
+        mpz_init(mpz_me);
 
-        // c = p
-        // a = this
-        // b = other
-        // inv = b^{-1} mod p
-        mpz_t c, inv, a, b;
-        mpz_init_set_str(c, "2305843009213693951", 10);
-        mpz_init(inv);
-        mpz_init(a);
-        mpz_init(b);
+        mpz_set_ui(mpz_elem, other.ele);
+        mpz_set_ui(mpz_me, ele);
 
-        mpz_set_ui(a, ele);
-        mpz_set_ui(b, other.ele);
+        mpz_init(result);
 
-        mpz_invert(inv, b, c);
+        mpz_invert(result, mpz_elem, d);
 
-        mpz_mul(inv, inv, a);
-        mpz_mod(inv, inv, c);
-        
-        ans.ele = mpz_get_ui(inv);
+        mpz_mul(result, result, mpz_me);
+        mpz_mod(result, result, d);
 
-        return ans;
+        answer.ele = mpz_get_ui(result);
+
+        return answer;
     }
 
     ZpLongEle& operator+=(const ZpLongEle& other) {
-        ele = (ele + other.ele) % p;
+        ele = (ele + other.ele);
+
+        if (ele >= p) {
+            ele -= p;
+        }
         return *this;
     }
 
@@ -98,7 +122,11 @@ public:
         unsigned long long low = _mulx_u64(ele, other.ele, &high);
         
         unsigned long long low61 = (low & p);
-        unsigned long long res = (low61 + (low >> 61) + (high << 3)) % p;
+        unsigned long long res = (low61 + (low >> 61) + (high << 3));
+
+        if (res >= p) {
+            res -= p;
+        }        
 
         ele = res;
 

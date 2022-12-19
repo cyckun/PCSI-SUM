@@ -40,7 +40,7 @@ std::vector<uint64_t> random_ele_generator(const uint32_t n, const uint32_t bitl
 
 auto CreateContext(e_role role, uint64_t neles, uint64_t polynomialsize, uint64_t nmegabins) {
     return PCSI::PCSIContext{"127.0.0.1",
-                              7777,  // port
+                              4444,  // port
                               role,
                               61,  // bitlength
                               neles,
@@ -55,12 +55,14 @@ auto CreateContext(e_role role, uint64_t neles, uint64_t polynomialsize, uint64_
 
 void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polynomialsize, uint64_t nmegabins) {
   
+    int same = neles / 3;
+
     auto client_context = CreateContext(CLIENT, neles, polynomialsize, nmegabins);
     auto server_context = CreateContext(SERVER, neles, polynomialsize, nmegabins);
 
     auto client_inputs = random_ele_generator(client_context.ele_num, 61, 1);
     auto server_inputs = random_ele_generator(server_context.ele_num, 61, 2);
-    for (int i=0; i < neles/3; ++i)
+    for (int i=0; i < same; ++i)
       client_inputs[i] = server_inputs[i];
 
     std::cout << client_inputs[10] << " " <<server_inputs[10] <<std::endl;
@@ -78,8 +80,9 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
 		client_thread.join();
 		server_thread.join();
 
-		std::cout << psi_client << std::endl;
-		std::cout << psi_server << std::endl;
+		std::cout << "client output: " << psi_client << std::endl;
+		std::cout << "server output: " << psi_server << std::endl;
+        std::cout << "client_output + server_output == real_output? " << ((psi_client + psi_server) == (c * same)) << std::endl;
 	}	
 
 }
@@ -87,5 +90,5 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
 
 int main(int argc, char **argv) {
 //   std::cout << "1" << std::endl;
-  PsiAnalyticsSumTest(61, 10, 5, 2);
+  PsiAnalyticsSumTest(61, 1ull << 12, 975, 16);
 }

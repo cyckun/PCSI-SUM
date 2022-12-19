@@ -1,4 +1,5 @@
 #include "poly.h"
+#include <iostream>
 
 void Poly::eval(ZpLongEle& Y, const std::vector<ZpLongEle>& coeff, ZpLongEle X) {
   ZpLongEle acc(0);
@@ -13,6 +14,7 @@ void Poly::eval(ZpLongEle& Y, const std::vector<ZpLongEle>& coeff, ZpLongEle X) 
 
 
 void Poly::interpolate(std::vector<ZpLongEle>& co, const std::vector<ZpLongEle>& X, std::vector<ZpLongEle>& Y) {
+
   int64_t m = X.size();
   if (Y.size() != X.size()) std::cout << "interpolate: vector length mismatch" << std::endl;
 
@@ -49,7 +51,6 @@ void Poly::interpolate(std::vector<ZpLongEle>& co, const std::vector<ZpLongEle>&
     t1 = one / t1;   // inv(t1, t1);
     t2 = Y[k] - t2;  // sub(t2, b[k], t2);
     t1 = t1 * t2;    // mul(t1, t1, t2);
-
     for (i = 0; i < k; i++) {
       t2 = prod[i] * t1;     // mul(t2, prod[i], t1);
       res[i] = res[i] + t2;  // add(res[i], res[i], t2);
@@ -58,10 +59,10 @@ void Poly::interpolate(std::vector<ZpLongEle>& co, const std::vector<ZpLongEle>&
     res[k] = t1;
 
     if (k < m - 1) {
-      if (k == 0)
+      if (k == 0) {
         prod[0] = p - prod[0];  // sub(prod[0], to_ZZ_p(ZZ_pInfo->p),prod[0]);//sub(prod[0],
                                 // ZZ_p::modulus(), prod[0]);//negate(prod[0], prod[0]);
-      else {
+      } else {
         t1 = p - X[k];               // sub(t1, to_ZZ_p(ZZ_pInfo->p),a[k]);//negate(t1, a[k]);
         prod[k] = t1 + prod[k - 1];  // add(prod[k], t1, prod[k-1]);
         for (i = k - 1; i >= 1; i--) {
@@ -72,6 +73,7 @@ void Poly::interpolate(std::vector<ZpLongEle>& co, const std::vector<ZpLongEle>&
       }
     }
   }
+
 
   while (m > 0 && !(res[m - 1] != zero)) m--;
   res.resize(m);

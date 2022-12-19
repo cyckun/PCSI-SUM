@@ -23,6 +23,9 @@
 
 #include <bits/stdc++.h>
 
+#define GREEN "\033[32m"
+#define RESET "\033[0m"
+
 namespace PCSI{
 
 int debugx = 0;
@@ -42,38 +45,50 @@ void interpolate_poly_with_dummy(std::vector<uint64_t>::iterator poly_offset,
                  std::vector<std::vector<uint64_t>>::const_iterator y_offset,
                  std::size_t bin_num,
                  PCSIContext& ctx) {
-    osuCrypto::PRNG prng(_mm_set_epi32(0, 0, 0, 2));
+    std::uniform_int_distribution<std::uint64_t> dist(0,
+                                                    (1ull << ctx.max_bitlen) - 1);  // [0,2^61)
+    std::random_device urandom("/dev/urandom");
+    auto rand_func = [&urandom, &dist]() { return dist(urandom); };
+
     std::vector<ZpLongEle> X(ctx.poly_size), Y(ctx.poly_size), co(ctx.poly_size);
-    printf("X size = %d\n", X.size());
+    // printf("X size = %d\n", X.size());
+
     for (auto i = 0ull, bin_index = 0ull; i < ctx.poly_size;) {
         if (bin_index < bin_num) {
             if ((*y_offset).size() > 0) {
                 for (auto &mask : *y_offset) {
                     // X[i].ele = mask & _61_mask;
-                    printf("i = %d\n", i);
+                    // printf("i = %d\n", i);
 
                     X.at(i).ele  = mask & _61_mask;
                     Y.at(i).ele = X[i].ele ^ *(x_offset);
                     i++;
-                    if (i > (ctx.poly_size-1)) break;
+                    // if (i > (ctx.poly_size-1)) break;
                 }
             }
             x_offset++;
             y_offset++;
             bin_index++;
         } else {
-            // X[i].ele = prng.get<uint64_t>();
-            // Y[i].ele = prng.get<uint64_t>();
-            // i++;
+            X.at(i).ele = rand_func();
+            Y.at(i).ele = rand_func();
+            i++;
         }
     }
 
-    // Poly::interpolate(co, X, Y);
-    // auto coeff = co.begin();
-    // for (auto i = 0ull; i < co.size(); i++, poly_offset++, coeff++) {
-    //     *poly_offset = (*coeff).ele;
+    // std::ofstream xyout;
+    // xyout.open("./xyout", std::ios::out | std::ios::app);
+    // for (int i = 0; i < X.size(); i++) {
+    //     xyout << X.at(i).ele << " " << Y.at(i).ele << std::endl;
     // }
+    // xyout.close();
 
+    Poly::interpolate(co, X, Y);
+
+    auto coeff = co.begin();
+    for (auto i = 0ull; i < co.size(); i++, poly_offset++, coeff++) {
+        *poly_offset = (*coeff).ele;
+    }
 }
 
 void interpolate_poly(std::vector<uint64_t>& polys, std::vector<uint64_t>& X, std::vector<std::vector<uint64_t>>& Y, PCSIContext& ctx) {
@@ -94,202 +109,189 @@ void interpolate_poly(std::vector<uint64_t>& polys, std::vector<uint64_t>& X, st
         interpolate_poly_with_dummy(poly, x, y, bin_num_in_mega_bin, ctx);
         Y_offset += bin_num_in_mega_bin;
     }
+
+    assert(Y_offset == Y.size());
 }
 
-void gen_corr_block(unsigned int n, int bins, int cur_level, int index, std::vector<uint64_t>& src, 
-                    std::vector<std::array<osuCrypto::block, 2>>& ot_output, 
-                    std::vector<osuCrypto::block>& corr_blocks) {
-    // generate msg
-    // msg[0] = m0 ^ w0 || m1 ^ w1
-    // msg[1] = m0 ^ w1 || m1 ^ w0
+void gen_corr_block(int n, int bins, int cur_level, int index, std::vector<uint64_t> &src, std::vector<std::array<osuCrypto::block,2>> &ot_output, std::vector<osuCrypto::block> &correction_blocks) {
 
-    debugx += 1;
-    int value_num = src.size();
+  int levels, i, j, x, s;
+  std::vector<uint64_t> bottom1;
+  std::vector<uint64_t> top1;
+  int values = src.size();
+  uint64_t temp;
+
+  uint64_t m0, m1, w0, w1, M0[2], M1[2], corr_mesg[2];
+  osuCrypto::block corr_block, temp_block;
+
+
+  if (values == 2) {
+    if (n == 1) {
+
+      m0 = src[0];
+      m1 = src[1];
+      temp_block = ot_output[cur_level*(bins/2)+index][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[cur_level*(bins/2)+index][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[cur_level*(bins/2)+index] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[cur_level*(bins/2)+index][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[0] = w0;
+      src[1] = w1;
+
+
+    }
+    else {
+      m0 = src[0];
+      m1 = src[1];
+      temp_block = ot_output[(cur_level+1)*(bins/2)+index][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[(cur_level+1)*(bins/2)+index][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[(cur_level+1)*(bins/2)+index] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[(cur_level+1)*(bins/2)+index][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[0] = w0;
+      src[1] = w1;
+
+
+    }
+    return; 
+  }
+
+  if (values == 3) {
+      
+      m0 = src[0];
+      m1 = src[1];
+      temp_block = ot_output[cur_level*(bins/2)+index][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[cur_level*(bins/2)+index][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[cur_level*(bins/2)+index] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[cur_level*(bins/2)+index][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[0] = w0;
+      src[1] = w1;
+
+
+
+
+      m0 = src[1];
+      m1 = src[2];
+      temp_block = ot_output[(cur_level+1)*(bins/2)+index][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[(cur_level+1)*(bins/2)+index][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[(cur_level+1)*(bins/2)+index] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[(cur_level+1)*(bins/2)+index][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[1] = w0;
+      src[2] = w1;
+
+      
+      m0 = src[0];
+      m1 = src[1];
+      temp_block = ot_output[(cur_level+2)*(bins/2)+index][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[(cur_level+2)*(bins/2)+index][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[(cur_level+2)*(bins/2)+index] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[(cur_level+2)*(bins/2)+index][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[0] = w0;
+      src[1] = w1;
+
+    return;
+  }
+  
+  levels = 2 * n - 1;
    
-    std::vector<uint64_t> bottom1;
-    std::vector<uint64_t> top1;
-
-    uint64_t m0, m1, w0, w1, tmp_m0[2], tmp_m1[2], corr_msg[2];
-    osuCrypto::block tmp_block;
+  for (i = 0; i < values-1; i += 2) {
 
 
-    if (value_num == 2) {
-        if (n == 1) {
-            m0 = src[0];
-            m1 = src[1];
-            tmp_block = ot_output[cur_level * (bins / 2) + index][0];
-            memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-            w0 = tmp_m0[0] ^ m0;
-            w1 = tmp_m0[1] ^ m1;
+      m0 = src[i];
+      m1 = src[i ^ 1];
+      temp_block = ot_output[(cur_level)*(bins/2)+index+i/2][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[(cur_level)*(bins/2)+index+i/2][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[(cur_level)*(bins/2)+index+i/2] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[(cur_level)*(bins/2)+index+i/2][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[i] = w0;
+      src[i ^ 1] = w1;
 
-            tmp_block = ot_output[cur_level * (bins / 2) + index][1];
-            memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
-
-            corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-            corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
-
-            corr_blocks[cur_level * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-
-            tmp_m1[0] = m0 ^ w1;
-            tmp_m1[1] = m1 ^ w0;
-            ot_output[cur_level * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-            src[0] = w0;
-            src[1] = w1;
-        } else {
-            m0 = src[0];
-            m1 = src[1];
-            tmp_block = ot_output[(cur_level + 1) * (bins / 2) + index][0];
-            memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-            w0 = tmp_m0[0] ^ m0;
-            w1 = tmp_m0[1] ^ m1;
-
-            tmp_block = ot_output[(cur_level + 1) * (bins / 2) + index][1];
-            memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
-
-            corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-            corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
-
-            corr_blocks[(cur_level + 1) * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-
-            tmp_m1[0] = m0 ^ w1;
-            tmp_m1[1] = m1 ^ w0;
-            ot_output[(cur_level + 1) * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-            src[0] = w0;
-            src[1] = w1;
-        }
-        return;
+      bottom1.push_back(src[i]); 
+      top1.push_back(src[i^1]);
     }
 
-    if (value_num == 3) {
-        // process 1 and 2
-        m0 = src[0];
-        m1 = src[1];
-        tmp_block = ot_output[cur_level * (bins / 2) + index][0];
-        memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-        w0 = tmp_m0[0] ^ m0;
-        w1 = tmp_m0[1] ^ m1;
+  if (values % 2 == 1){
+    top1.push_back(src[values-1]);
+  }
 
-        tmp_block = ot_output[cur_level * (bins / 2) + index][1];
-        memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
 
-        corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-        corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
+  gen_corr_block(n - 1, bins, cur_level + 1, index, bottom1, ot_output, correction_blocks);
+  gen_corr_block(n - 1, bins, cur_level + 1, index + values / 4, top1, ot_output, correction_blocks);
 
-        corr_blocks[cur_level * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
 
-        tmp_m1[0] = m0 ^ w1;
-        tmp_m1[1] = m1 ^ w0;
-        ot_output[cur_level * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-        src[0] = w0;
-        src[1] = w1;
+  for (i = 0; i < values-1; i += 2) {
 
-        // process 2 and 3
-        m0 = src[1];
-        m1 = src[2];
-        tmp_block = ot_output[(cur_level + 1) * (bins / 2) + index][0];
-        memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-        w0 = tmp_m0[0] ^ m0;
-        w1 = tmp_m0[1] ^ m1;
 
-        tmp_block = ot_output[(cur_level + 1) * (bins / 2) + index][1];
-        memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
+      m1 = top1[i/2];
+      m0 = bottom1[i/2];
+      temp_block = ot_output[(cur_level + levels - 1)*(bins/2)+index+i/2][0];
+      memcpy(M0, &temp_block, sizeof(M0)); 
+      w0 = M0[0] ^ m0;
+      w1 = M0[1] ^ m1;
+      temp_block = ot_output[(cur_level + levels - 1)*(bins/2)+index+i/2][1];
+      memcpy(M1, &temp_block, sizeof(M1)); 
+      corr_mesg[0] = M1[0] ^ m0 ^ w1;
+      corr_mesg[1] = M1[1] ^ m1 ^ w0;
+      correction_blocks[(cur_level + levels - 1)*(bins/2)+index+i/2] = osuCrypto::toBlock(corr_mesg[1], corr_mesg[0]); 
+      M1[0] = m0 ^ w1;
+      M1[1] = m1 ^ w0;
+      ot_output[(cur_level + levels - 1)*(bins/2)+index+i/2][1] = osuCrypto::toBlock(M1[1],M1[0]);
+      src[i] = w0;
+      src[i ^ 1] = w1;
 
-        corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-        corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
+  }
 
-        corr_blocks[(cur_level + 1) * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-        
-        tmp_m1[0] = m0 ^ w1;
-        tmp_m1[1] = m1 ^ w0;
-        ot_output[(cur_level + 1) * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-        src[0] = w0;
-        src[1] = w1;
-        // process 1 and 3
-        m0 = src[1];
-        m1 = src[2];
-        tmp_block = ot_output[(cur_level + 2) * (bins / 2) + index][0];
-        memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-        w0 = tmp_m0[0] ^ m0;
-        w1 = tmp_m0[1] ^ m1;
+  int idx =int(ceil(values*0.5));
+  if (values % 2 == 1) {
+    src[values-1] = top1[idx-1];
+  }
 
-        tmp_block = ot_output[(cur_level + 2) * (bins / 2) + index][1];
-        memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
-
-        corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-        corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
-
-        corr_blocks[(cur_level + 2) * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-        
-        tmp_m1[0] = m0 ^ w1;
-        tmp_m1[1] = m1 ^ w0;
-        ot_output[(cur_level + 2) * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-        src[0] = w0;
-        src[1] = w1;
-        
-        return;
-    }
-    
-    int levels = 2 * n - 1;
-    for (int i = 0; i < value_num - 1; i++) {
-        m0 = src[i];
-        m1 = src[i ^ 1];
-        tmp_block = ot_output[cur_level * (bins / 2) + (i / 2)][0];
-        memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-        w0 = tmp_m0[0] ^ m0;
-        w1 = tmp_m0[1] ^ m1;
-
-        tmp_block = ot_output[cur_level * (bins / 2) + index][1];
-        memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
-
-        corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-        corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
-
-        corr_blocks[cur_level * (bins / 2) + index] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-        
-        tmp_m1[0] = m0 ^ w1;
-        tmp_m1[1] = m1 ^ w0;
-        ot_output[cur_level * (bins / 2) + index][1] = osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-        src[i] = w0;
-        src[i ^ 1] = w1;
-        bottom1.push_back(src[i]);
-        top1.push_back(src[i ^ 1]);
-    }
-
-    if (value_num & 1) {
-        top1.push_back(src[value_num - 1]);
-    }
-
-    if (n > 0) gen_corr_block(n - 1, bins, cur_level + 1, index, bottom1, ot_output, corr_blocks);
-    if (n > 0) gen_corr_block(n - 1, bins, cur_level + 1, index + value_num / 4, bottom1, ot_output, corr_blocks);
-
-    for (int i = 0; i < value_num - 1; i+=2) {
-        m0 = top1[i / 2];
-        m1 = bottom1[i / 2];
-        tmp_block = ot_output[(cur_level + levels - 1) * (bins / 2) + index + (i / 2)][0];
-        memcpy(tmp_m0, &tmp_block, sizeof(tmp_m0));
-        w0 = tmp_m0[0] ^ m0;
-        w1 = tmp_m0[1] ^ m1;
-
-        tmp_block = ot_output[(cur_level + levels - 1) * (bins / 2) + index + (i / 2)][1];
-        memcpy(tmp_m1, &tmp_block, sizeof(tmp_m1));
-
-        corr_msg[0] = tmp_m1[0] ^ m0 ^ w1;
-        corr_msg[1] = tmp_m1[1] ^ m1 ^ w0;
-
-        corr_blocks[(cur_level + levels - 1) * (bins / 2) + index + (i / 2)] = osuCrypto::toBlock(corr_msg[1], corr_msg[0]);
-        
-        tmp_m1[0] = m0 ^ w1;
-        tmp_m1[1] = m1 ^ w0;
-        ot_output[(cur_level + levels - 1) * (bins / 2) + index + (i / 2)][1] =osuCrypto::toBlock(tmp_m1[1], tmp_m1[0]);
-        src[i] = w0;
-        src[i ^ 1] = w1;
-    }
-
-    int middle = value_num >> 1;
-    if (value_num & 1) {
-        src[value_num - 1] = top1[middle];
-    }
-    // printf("leave gen_corr_block, value_num = %d, n = %d, debugx = %d , bottom1 = %d,\n", value_num, n, debugx, bottom1.size());
 }
 
 std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSIContext& ctx) {
@@ -300,24 +302,28 @@ std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSICon
         dest[i] = i;
     }
 
-    osuCrypto::PRNG prng(_mm_set_epi32(0, 0, 0, 0));
+    osuCrypto::PRNG prng(_mm_set_epi32(4253233465, 334565, 0, 235));
 
     // generate random permutation
-    for (int i = bins - 1; i >= 0; i--) {
+    for (int i = bins - 1; i > 0; i--) {
         int index = prng.get<uint64_t>() % (i + 1);
-        dest[i] ^= dest[index];
-        dest[index] ^= dest[i];
-        dest[i] ^= dest[index];
+        // std::cout << GREEN << index << " ";
+        int tmp = dest[index];
+        dest[index] = dest[i];
+        dest[i] = tmp;
     } 
+    // std::cout << RESET << std::endl;
 
     int n = int(ceil(log2(bins)));
     // generate transposition
     std::cout << "start route" << std::endl;
     route(n, 0, 0, src, dest);
-    std::cout << "finish route" << std::endl;
+    // std::cout << "finish route" << std::endl;
     // the switch set is the choices in ot
     osuCrypto::BitVector choices = retrieve_switches(bins);
-    std::cout << "finish get" << std::endl;
+
+
+    // std::cout << "finish get" << std::endl;
 
     // process ot
     osuCrypto::IOService ios;
@@ -326,7 +332,17 @@ std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSICon
     std::vector<osuCrypto::block> recv_corr(choices.size());
 
     rot_recv(choices, recv_msg, ctx);
-    printf("finish rot_recv");
+    // std::ofstream rotout;
+    // rotout.open("./rotout", std::ios::out);
+    // for (int i = 0; i < choices.size(); i++) {
+    //     uint64_t tmp[2];
+    //     memcpy(tmp, &recv_msg[i], sizeof(tmp));
+    //     rotout << choices[i] << " " << tmp[0] << tmp[1] << std::endl;
+    // }
+    // rotout.close();
+    // std::cout << "finish rot" << std::endl;
+    // getchar();
+
 
     osuCrypto::Session ep(ios, ctx.ip, ctx.port + 100, osuCrypto::SessionMode::Server, name);
     auto osn_recv_chl = ep.addChannel(name, name);
@@ -339,8 +355,10 @@ std::vector<osuCrypto::block> recv_osn(std::vector<int>& dest, int bins, PCSICon
     for (int i = 0; i < recv_msg.size(); i++) {
         // choices means switches
         if (choices[i]) {
-            tmp_msg[0] = (*((uint64_t *)&recv_msg)) ^ (*((uint64_t *)&recv_corr));
-            tmp_msg[1] = (*((uint64_t *)&recv_msg) + 1) ^ (*((uint64_t *)&recv_corr) + 1);
+            memcpy(tmp_corr, &recv_corr[i], sizeof(tmp_corr)); 
+            memcpy(tmp_msg, &recv_msg[i], sizeof(tmp_msg));
+            tmp_msg[0] = tmp_corr[0] ^ tmp_msg[0];
+            tmp_msg[1] = tmp_corr[1] ^ tmp_msg[1];
             recv_msg[i] = osuCrypto::toBlock(tmp_msg[1], tmp_msg[0]);
         }
     }
@@ -359,7 +377,7 @@ std::vector<std::vector<uint64_t>> send_osn(int bins, PCSIContext& ctx) {
     std::vector<std::vector<uint64_t>> mat_masks(bins);
 
 
-    osuCrypto::PRNG prng(_mm_set_epi32(0, 0, 0, 1));
+    osuCrypto::PRNG prng(_mm_set_epi32(4253233465, 334565, 0, 235));
 
     for (int i = 0; i < bins; i++) {
         uint64_t r = prng.get<uint64_t>();
@@ -370,13 +388,16 @@ std::vector<std::vector<uint64_t>> send_osn(int bins, PCSIContext& ctx) {
     std::vector<std::array<osuCrypto::block, 2>> ot_msg(switch_num);  // 电路中输入、输出、门的个数
     // ot_msg is valued in rot, it is outPut;
     rot_send(ot_msg, ctx);    // this is OT , ot_msg is output;
+
     printf("test send_osn,  switch_num = %d.\n", switch_num);
 
     std::vector<osuCrypto::block> corr_blocks(switch_num);
     
     std::cout << "n = " << n << std::endl;
     std::cout << "bins = " << bins << std::endl;
+
     gen_corr_block((unsigned int)n, bins, 0, 0, masks, ot_msg, corr_blocks);
+
     printf("leave gen_corr_block ********************************************** .\n");
 
     osuCrypto::IOService ios;
@@ -401,12 +422,24 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
     table.Insert(eles);
     // map elements
     table.MapElements();
+    // table.Print();
     // get vector
     cuckoo_table = table.AsRawVector();
-    std::cout << "test, finish get vector ." << std::endl;
+    // std::cout << "test, finish get vector ." << std::endl;
+
+    std::cout << "[pcsi] finish cuckoo" << std::endl;
+    // getchar();
 
     // 2. oprf
     std::vector<uint64_t> masks = oprf_receiver(cuckoo_table, ctx);
+
+    // std::ofstream oprfout;
+    // oprfout.open("./fout", std::ios::out);
+    // for (int i = 0; i < masks.size(); i++) {
+    //     oprfout << masks[i] << std::endl;
+    // }
+    // oprfout.close();
+    std::cout << "[client]finish oprf" << std::endl;
 
     std::cout << "test, finish oprf receiver ." << std::endl;
 
@@ -420,29 +453,33 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
     }
 
     for (auto i = 0ull; i < X.size(); i++) {
-        X[i].ele = masks[i];
+        X.at(i).ele = masks.at(i);
     }
     // 3.1 receive poly from server
-    std::vector<uint8_t> poly_buffer(ctx.mega_bins_num * ctx.poly_bytelength);
+    std::vector<uint8_t> poly_buffer(ctx.mega_bins_num * ctx.poly_bytelength, 0);
 
     sock->Receive(poly_buffer.data(), ctx.mega_bins_num * ctx.poly_bytelength);
     sock->Close();
     std::cout << "test, get poly after socket recv ." << std::endl;
 
     // 3.2 evaluate
-    for (auto i = 0; i < poly_buffer.size() && i < ctx.mega_bins_num; i++) {  // cyc:check
-        for (auto j = 0; j < ctx.poly_size; j++) {
+    for (auto i = 0ull; i < poly_buffer.size() && i < ctx.mega_bins_num; i++) {  // cyc:check
+        for (auto j = 0ull; j < ctx.poly_size; j++) {
             // polys[i][j].ele = (reinterpret_cast<uint64_t *>(
-            polys.at(i).at(j).ele = (reinterpret_cast<uint64_t *>(
-          poly_buffer.data()))[i * ctx.poly_size + j];
+            polys.at(i).at(j).ele = (reinterpret_cast<uint64_t *>(poly_buffer.data()))[i * ctx.poly_size + j];
         }
     }
 
+    // std::ofstream yout;
+    // yout.open("./yout", std::ios::out);
 
     for (auto i = 0; i < X.size(); i++) {
         auto p = i / bin_num_in_mega_bin;
+        // ZpLongEle tmp(i);
         Poly::eval(Y.at(i), polys.at(p), X.at(i));
+        // yout << X.at(i).ele << " " << Y.at(i).ele << std::endl;
     }
+    // yout.close();
 
     // 3.3 xor
     std::vector<uint64_t> result;
@@ -460,9 +497,22 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
     table.SetNumOfHashFunctions(ctx.hash_num);
     table.Insert(eles);
     table.MapElements();
+    // table.Print();
+    // getchar();
 
     auto simple_table = table.AsRaw2DVector();
     auto masks = oprf_sender(simple_table, ctx);
+
+    // std::ofstream oprfout;
+    // oprfout.open("./prfout", std::ios::out);
+    // for (int i = 0; i < masks.size(); i++) {
+    //     for (int j = 0; j < masks[i].size(); j++) {
+    //         oprfout << masks[i][j] << " ";
+    //     }
+    //     oprfout << std::endl;
+    // }
+    // oprfout.close();
+    std::cout << "[server]finish oprf" << std::endl;
 
     std::vector<uint64_t> polys(ctx.mega_bins_num * ctx.poly_size, 0);
     std::vector<uint64_t> X(ctx.bins_num);
@@ -474,12 +524,39 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
     std::sort(tmp.begin(), tmp.end());
     auto last = std::unique(tmp.begin(), tmp.end());
     tmp.erase(last, tmp.end());
+    assert(tmp.size() == X.size());
+
+    // std::ofstream sout;
+    // sout.open("./sout", std::ios::out);
+    // for (int i = 0; i < X.size(); i++) {
+    //     sout << X[i] << std::endl;
+    // }
+    // sout.close();
+    std::cout << "sfinsih" << std::endl;
+    // getchar();
+
+    // std::cout << X[0] << std::endl;
+    // getchar();
+
+    // for (int i = 0; i < X.size(); i++) {
+    //     X.at(i) = i;
+    // }
+
+    // for (int i = 0; i < masks.size(); i++) {
+    //     for (int j = 0; j < masks[i].size(); j++) {
+    //         masks.at(i).at(j) = i + j;
+    //     }
+    // }
 
     interpolate_poly(polys, X, masks, ctx);   // test is correctness.
 
-    for (int xx = 0; xx < polys.size();xx++) {
-        printf("%08x,", polys[xx]);
-    }
+    // std::ofstream polyout;
+    // polyout.open("./polyout", std::ios::out);
+    // for (int i = 0; i < polys.size(); i++) {
+    //     polyout << polys.at(i) << std::endl;
+    // }
+    // polyout.close();
+    
     printf("\nploy vector print\n");
 
     std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
@@ -513,7 +590,13 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
 	    std::cout << "[client]finish 1.1" << std::endl;
         // 1.2 processing offline osn
         std::vector<osuCrypto::block> ot_output;
-        ot_output = recv_osn(dest, bins, ctx);
+        ot_output = recv_osn(dest, bins, ctx); // ****suppose it is correct
+        // std::ofstream permout;
+        // permout.open("./permout", std::ios::out);
+        // for (int i = 0; i < dest.size(); i++) {
+        //     permout << dest[i] << std::endl;
+        // }
+        // permout.close();
         // dest : x_Pi(w) ^ Mask, is output;
 	    std::cout << "[client]finish 1" << std::endl;
         // 2. pcsi preprocessing 
@@ -525,6 +608,14 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         for (int i = 0; i < bins; i++) {
             shuffled_sets[i] = sets[dest[i]];
         }
+
+        // std::ofstream tout;
+        // tout.open("./tout", std::ios::out);
+        // for (int i = 0; i < sets.size(); i++) {
+        //     tout << sets[i] << std::endl;
+        // }
+        // tout.close();
+        
 
         std::string name = "pcsi";
         osuCrypto::IOService ios;
@@ -541,6 +632,14 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
             }
         }
         masked_eval(n, 0, 0, input_vec, mat_ot_output);
+
+        // std::ofstream aout;
+        // aout.open("./aout", std::ios::out);
+        // for (int i = 0; i < input_vec.size(); i++) {
+        //     aout << input_vec[i] << std::endl;
+        // }
+        // aout.close();
+
 	    std::cout << "[client]finish 3" << std::endl;
         // 4. send the result to process equality test
         std::string name_ = "pcsi";
@@ -550,6 +649,14 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         for (int i = 0; i < bins; i++) {
             sets_eq.push_back(shuffled_sets[i] ^ input_vec[i]);
         }
+
+        // std::ofstream axout;
+        // axout.open("./axout", std::ios::out);
+        // for (int i = 0; i < sets_eq.size(); i++) {
+        //     axout << sets_eq[i] << std::endl;
+        // }
+        // axout.close();
+
         send_chl_eq.asyncSend(sets_eq);
 	    std::cout << "[client]finish 4" << std::endl;
         // 5. do sum
@@ -584,7 +691,7 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
 
         for (int i = 0; i < cuckoo_table.size(); i++) {
             int r = prng.get<uint64_t>();
-            msg[i].push_back(osuCrypto::toBlock(0, r));
+            msg[i].push_back(osuCrypto::toBlock(0, 0 - r));
             msg[i].push_back(osuCrypto::toBlock(0, shuffled_table[i] - r));
             output += r;
         }
@@ -620,6 +727,21 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         for (int i = 0; i < ctx.bins_num; i++) {
             output_masks.push_back(pre_masks[i][1]);
         }
+
+        // std::ofstream sout;
+        // sout.open("./sout", std::ios::out);
+        // for (int i = 0; i < sets.size(); i++) {
+        //     sout << sets[i] << std::endl;
+        // }
+        // sout.close();
+
+        // std::ofstream bout;
+        // bout.open("./bout", std::ios::out);
+        // for (int i = 0; i < output_masks.size(); i++) {
+        //     bout << output_masks[i] << std::endl;
+        // }
+        // bout.close();
+
         printf("finish masks .\n");
         // equality test
         std::string name_ = "pcsi";
@@ -627,12 +749,20 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         auto recv_chl_eq = ep_.addChannel(name_, name_);
         std::vector<uint64_t> sets_eq(bins);
         recv_chl_eq.recv(sets_eq.data(), sets_eq.size());
+
+        // for (int i = 0; i < sets_eq.size(); i++) {
+        //     std::cout << sets_eq[i] << " " << output_masks[i] << std::endl;
+        //     getchar();
+        // }
+
         osuCrypto::BitVector char_vec(sets_eq.size());
         for (int i=0; i < sets_eq.size();++i) {
             if (sets_eq[i] == output_masks[i]) {
                 char_vec[i] = 1;
             }
         }
+
+        // std::cout << char_vec << std::endl;
 
         // do sum
         printf("begin do sum.\n");

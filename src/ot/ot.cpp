@@ -15,6 +15,7 @@
 #include "common/pcsi_context.h"
 
 #include <thread>
+#include <bits/stdc++.h>
 
 using namespace osuCrypto;
 
@@ -33,7 +34,7 @@ std::vector<uint64_t> oprf_receiver(const std::vector<uint64_t>& in, PCSI::PCSIC
     // configure network
     std::string name = "pcsi";
     IOService ios;
-    Session ep(ios, context.ip, context.port + 1, SessionMode::Client, name);
+    Session ep(ios, context.ip, context.port + 600, SessionMode::Client, name);
     auto recv_chl = ep.addChannel(name, name);
 
     uint64_t base_ot_num = recv.getBaseOTCount();
@@ -55,10 +56,11 @@ std::vector<uint64_t> oprf_receiver(const std::vector<uint64_t>& in, PCSI::PCSIC
         recv.encode(i, &blocks[i], reinterpret_cast<uint8_t *>(&receiver_encoding[i]), sizeof(osuCrypto::block));
     }
 
+
     recv.sendCorrection(recv_chl, ot_num);
 
     for (auto i = 0ull; i < ot_num; i++) {
-        out.push_back(reinterpret_cast<uint64_t *>(&receiver_encoding[i])[0] & _61_mask);
+        out.push_back(reinterpret_cast<uint64_t *>(&receiver_encoding.at(i))[0] &= _61_mask);
     }
 
     recv_chl.close();
@@ -78,7 +80,7 @@ std::vector<std::vector<uint64_t>> oprf_sender(const std::vector<std::vector<uin
 
     std::string name = "pcsi";
     IOService ios;
-    Session ep(ios, context.ip, context.port + 1, SessionMode::Server, name);
+    Session ep(ios, context.ip, context.port + 600, SessionMode::Server, name);
     auto send_chl = ep.addChannel(name, name);
 
     uint64_t base_ot_num = sender.getBaseOTCount();
@@ -106,16 +108,17 @@ std::vector<std::vector<uint64_t>> oprf_sender(const std::vector<std::vector<uin
     sender.recvCorrection(send_chl, ot_num);
 
     for (auto i = 0ull; i < ot_num; i++) {
-        for (auto j = 0ull; j < in_blocks[i].size(); j++) {
-            sender.encode(i, &in_blocks[i][j], &out_blocks[i][j], sizeof(osuCrypto::block));
+        for (auto j = 0ull; j < in_blocks.at(i).size(); j++) {
+            sender.encode(i, &in_blocks.at(i).at(j), &out_blocks.at(i).at(j), sizeof(osuCrypto::block));
         }
     }
 
     for (auto i = 0ull; i < ot_num; i++) {
-        for (auto &encoding: out_blocks[i]) {
-            out[i].push_back(reinterpret_cast<uint64_t *>(&encoding)[0] & _61_mask);
+        for (auto &encoding: out_blocks.at(i)) {
+            out[i].push_back(reinterpret_cast<uint64_t *>(&encoding)[0] &= _61_mask);
         }
     }
+
 
     send_chl.close();
     ep.stop();
@@ -219,10 +222,10 @@ void rot_recv(osuCrypto::BitVector& choices, std::vector<osuCrypto::block>& recv
     prng.get((uint8_t*)base_send.data()->data(), sizeof(osuCrypto::block) * 2 * base_send.size());
 
     DefaultBaseOT base_ot;
-    osuCrypto::IknpOtExtReceiver recv;
+    base_ot.send(base_send, prng, recv_chl, 1);
 
     // start ot extension
-    base_ot.send(base_send, prng, recv_chl, 1);
+    osuCrypto::IknpOtExtReceiver recv;
     recv.setBaseOts(base_send);
     recv.receive(choices, recv_msg, prng, recv_chl);
 }

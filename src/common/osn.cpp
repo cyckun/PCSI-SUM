@@ -16,9 +16,10 @@ const int benes_size = 1.27*(1 << 20);
 static char path[benes_size];
 
 inline void swap(uint64_t& a, uint64_t& b) {
-    a = a ^ b;
-    b = a ^ b;
-    a = a ^ b;
+	uint64_t tmp;
+    tmp = b;
+    b = a;
+    a = tmp;
 }
 
 void initialize(int values, int levels) {
@@ -33,7 +34,7 @@ void initialize(int values, int levels) {
 
 void DFS(int idx, int route) {
     stack<pair<int, int> > st; 
-    st.push({idx,route});
+    st.push({idx, route});
     pair<int, int> pr;
     while (!st.empty()) {
 		pr = st.top();
@@ -42,7 +43,6 @@ void DFS(int idx, int route) {
 		if (path[pr.first ^ 1] < 0) {
 			st.push({pr.first ^ 1, pr.second ^ 1});
 		}
-			
 
 		idx = perm[inv_perm[pr.first] ^ 1];
 		if (path[idx] < 0) {
@@ -106,6 +106,7 @@ void route(int n, int cur_level, int index, const vector<int> &src, const vector
 			switched[cur_level+2][index] = 1;   // 1 2 3 -> 3 2 1
 		} 
       }
+	  
       return;
     }
 
@@ -143,7 +144,7 @@ void route(int n, int cur_level, int index, const vector<int> &src, const vector
 
     for (i = 0; i < values - 1; i += 2) {
       	switched[cur_level][index + i / 2] = path[i];
-      	for (j = 0; j < 2; j++) {
+      	for (j = 0; j < 2; ++j) {
         	x = shuffle((i | j) ^ path[i], n);
         	if (x < values / 2) {
           		bottom1.push_back(src[i | j]); 
@@ -159,7 +160,7 @@ void route(int n, int cur_level, int index, const vector<int> &src, const vector
 
     for (i = 0; i < values - 1; i += 2) {
 		s = switched[cur_level + levels - 1][index + i / 2] = path[perm[i]];
-		for (j = 0; j < 2; j++) {
+		for (j = 0; j < 2; ++j) {
 			x = shuffle((i | j) ^ s, n);
 			if (x < values / 2) {
 				bottom2[x] = src[perm[i | j]]; 
