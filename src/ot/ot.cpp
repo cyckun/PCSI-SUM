@@ -134,7 +134,6 @@ void ot_send(std::vector<std::vector<osuCrypto::block>>& msg, PCSI::PCSIContext&
     auto send_chl = ep.addChannel(name, name);
 
     PRNG prng(_mm_set_epi32(0, 0, 0, 0));
-    std::cout << "ot_send func , sec_para  = " << sec_para << std::endl;
 
     std::vector<osuCrypto::block> base_recv(sec_para);
     DefaultBaseOT base_ot;

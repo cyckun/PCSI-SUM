@@ -389,16 +389,9 @@ std::vector<std::vector<uint64_t>> send_osn(int bins, PCSIContext& ctx) {
     // ot_msg is valued in rot, it is outPut;
     rot_send(ot_msg, ctx);    // this is OT , ot_msg is output;
 
-    printf("test send_osn,  switch_num = %d.\n", switch_num);
-
     std::vector<osuCrypto::block> corr_blocks(switch_num);
-    
-    std::cout << "n = " << n << std::endl;
-    std::cout << "bins = " << bins << std::endl;
 
     gen_corr_block((unsigned int)n, bins, 0, 0, masks, ot_msg, corr_blocks);
-
-    printf("leave gen_corr_block ********************************************** .\n");
 
     osuCrypto::IOService ios;
     std::string name = "pcsi";
@@ -441,8 +434,6 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
     // oprfout.close();
     std::cout << "[client]finish oprf" << std::endl;
 
-    std::cout << "test, finish oprf receiver ." << std::endl;
-
     // 3. get polynominal and evaluate
     std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
     const auto bin_num_in_mega_bin = ceil_divide(ctx.bins_num, ctx.mega_bins_num);
@@ -460,7 +451,6 @@ std::vector<uint64_t> client_opprf(const std::vector<uint64_t>& eles, std::vecto
 
     sock->Receive(poly_buffer.data(), ctx.mega_bins_num * ctx.poly_bytelength);
     sock->Close();
-    std::cout << "test, get poly after socket recv ." << std::endl;
 
     // 3.2 evaluate
     for (auto i = 0ull; i < poly_buffer.size() && i < ctx.mega_bins_num; i++) {  // cyc:check
@@ -556,8 +546,6 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
     //     polyout << polys.at(i) << std::endl;
     // }
     // polyout.close();
-    
-    printf("\nploy vector print\n");
 
     std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
     sock->Send((uint8_t *)polys.data(), ctx.mega_bins_num * ctx.poly_bytelength); // 已测试，不是sock的问题
@@ -570,13 +558,11 @@ std::vector<uint64_t> server_opprf(const std::vector<uint64_t>& eles, PCSIContex
 
 uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::vector<uint64_t>& data) {
     // network
-    printf("enter exec.\n");
     std::unique_ptr<CSocket> sock = create_socket(ctx.ip, ctx.port, static_cast<e_role>(ctx.role));
     sock->Close();
 
     std::vector<uint64_t> input_bak(inputs), sets;
     int bins = ctx.bins_num;   // coocku hash bins num: hash值的长度？ = n_eles * 1.27；与元素个数线性关系
-    std::cout << "ctx.bins_num = " << bins << std::endl;
     uint64_t output = 0;
 
     if (ctx.role == CLIENT) {
@@ -700,15 +686,11 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
     } else {
         // offline osn
         // server is receiver, have func, not data;
-        std::cout << "server inter exec. " << std::endl;
         std::vector<std::vector<uint64_t>> pre_masks;
         pre_masks = send_osn(bins, ctx);
-        printf("server send_osn, pre_masks size = %d .\n", pre_masks.size());
 
         // pcsi preprocessing
         sets = server_opprf(input_bak, ctx);
-
-        printf("finish opprf.\n");
 
         // online osn
         osuCrypto::IOService ios;
@@ -741,19 +723,12 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
         //     bout << output_masks[i] << std::endl;
         // }
         // bout.close();
-
-        printf("finish masks .\n");
         // equality test
         std::string name_ = "pcsi";
         osuCrypto::Session ep_(ios, ctx.ip, ctx.port + 30, osuCrypto::SessionMode::Client, name_);
         auto recv_chl_eq = ep_.addChannel(name_, name_);
         std::vector<uint64_t> sets_eq(bins);
         recv_chl_eq.recv(sets_eq.data(), sets_eq.size());
-
-        // for (int i = 0; i < sets_eq.size(); i++) {
-        //     std::cout << sets_eq[i] << " " << output_masks[i] << std::endl;
-        //     getchar();
-        // }
 
         osuCrypto::BitVector char_vec(sets_eq.size());
         for (int i=0; i < sets_eq.size();++i) {
@@ -762,10 +737,7 @@ uint64_t exec(const std::vector<uint64_t>& inputs, PCSIContext& ctx, const std::
             }
         }
 
-        // std::cout << char_vec << std::endl;
-
         // do sum
-        printf("begin do sum.\n");
         std::vector<osuCrypto::block> recv_msg(char_vec.size());
         ot_recv(char_vec, recv_msg, ctx);
         uint64_t ot_msg[2];

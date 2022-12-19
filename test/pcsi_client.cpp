@@ -63,7 +63,6 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
     for (int i=0; i < neles/3; ++i)
       client_inputs[i] = server_inputs[i];
 
-    std::cout << "client data = " << client_inputs[10] <<std::endl;
     int c = 2;
     std::vector<uint64_t> ass_data(neles, c);
 
@@ -71,7 +70,7 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
 
     {
         auto psi_client = PCSI::exec(client_inputs, client_context, ass_data);
-        std::cout << "psi client end. , " << psi_client << std::endl;
+        std::cout << "psi client end.  " << psi_client << std::endl;
     }
 
 }
@@ -79,5 +78,5 @@ void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polyn
 
 int main(int argc, char **argv) {
 //   std::cout << "1" << std::endl;
-  PsiAnalyticsSumTest(61, 8, 5, 2);
+  PsiAnalyticsSumTest(61, 1ull << 12, 975, 16);
 }

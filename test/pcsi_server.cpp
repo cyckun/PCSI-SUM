@@ -10,6 +10,11 @@
 #include "HashingTables/cuckoo_hashing/cuckoo_hashing.h"
 #include "HashingTables/simple_hashing/simple_hashing.h"
 
+
+constexpr std::size_t NELES_2_12 = 1ull << 12;
+constexpr std::size_t POLYNOMIALSIZE_2_12 = 975;
+constexpr std::size_t NMEGABINS_2_12 = 16;
+
 std::vector<uint64_t> random_ele_generator(const uint32_t n, const uint32_t bitlen, const uint32_t seed) {
     std::vector<uint64_t> eles;
     eles.reserve(n);
@@ -48,33 +53,27 @@ auto CreateContext(e_role role, uint64_t neles, uint64_t polynomialsize, uint64_
                               3,  // # hash functions
                               polynomialsize,
                               polynomialsize * sizeof(uint64_t),
-                              nmegabins
+                              nmegabins  // Number of mega bins
                               };
 }
 
 
 void PsiAnalyticsSumTest(std::size_t elem_bitlen, uint64_t neles, uint64_t polynomialsize, uint64_t nmegabins) {
-  
-    // auto client_context = CreateContext(CLIENT, neles, polynomialsize, nmegabins);
     auto server_context = CreateContext(SERVER, neles, polynomialsize, nmegabins);
-
-    // auto client_inputs = random_ele_generator(client_context.ele_num, 61, 1);
     auto server_inputs = random_ele_generator(server_context.ele_num, 61, 2);
     // for (int i=0; i < neles/3; ++i)
     //   client_inputs[i] = server_inputs[i];
 
-    std::cout << "server data =  " << server_inputs[10] <<std::endl;
-
-    std::uint64_t psi_client, psi_server;
+    std::uint64_t psi_server;
 
     {
         auto psi_server = PCSI::exec(server_inputs, server_context);
-        std::cout << "psi server end , " <<  psi_server << std::endl;
+        std::cout << "psi server end." <<  psi_server << std::endl;
     }
 }
 
 
 int main(int argc, char **argv) {
-//   std::cout << "1" << std::endl;
-  PsiAnalyticsSumTest(61, 8, 5, 2);
+  //   std::cout << "1" << std::endl;
+  PsiAnalyticsSumTest(61, NELES_2_12, POLYNOMIALSIZE_2_12, NMEGABINS_2_12);
 }
